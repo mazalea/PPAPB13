@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1093392859671",
+    "project_id": "ppapb13",
+    "storage_bucket": "ppapb13.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1093392859671:android:cf5b5f2187da81d02d9252",
+        "android_client_info": {
+          "package_name": "com.example.ppapb13"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAxLR2pdy0f9Y6gLaV_zI87HsnnBuiKm_M"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
