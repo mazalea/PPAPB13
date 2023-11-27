@@ -1,126 +1,110 @@
 package com.example.ppapb13
 
+import android.annotation.SuppressLint
+import android.content.Intent
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
-import android.widget.AdapterView
 import android.widget.ArrayAdapter
+import android.widget.ListView
 import androidx.lifecycle.MutableLiveData
 import com.example.ppapb13.databinding.ActivityMainBinding
 import com.google.firebase.firestore.FirebaseFirestore
 
 class MainActivity : AppCompatActivity() {
-    private val firestore = FirebaseFirestore.getInstance()
-    private val budgetCollectionRef = firestore.collection("budgets")
     private lateinit var binding: ActivityMainBinding
-    private var updateId = ""
-    private val budgetListLiveData: MutableLiveData<List<Budget>> by lazy {
-        MutableLiveData<List<Budget>>()
+    private lateinit var listView: ListView
+    private lateinit var adapter: ArrayAdapter<String>
+    private val complaintList: ArrayList<Complaint> = ArrayList()
+    private val complaintListLiveData: MutableLiveData<List<Complaint>> by lazy {
+        MutableLiveData<List<Complaint>>()
     }
 
+    @SuppressLint("SuspiciousIndentation")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        // Set up the click listener for the "Tambah" button to open the Form activity
+        binding.fabTambah.setOnClickListener {
+            val intent = Intent(this, FormActivity::class.java)
+            startActivity(intent)
+        }
+
+        listView = findViewById(R.id.listView)
+        adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, ArrayList())
+        listView.adapter = adapter
+
+        // Terima data dari intent
+        val complaintData = intent.getSerializableExtra("complaintData") as? Complaint
+
+        // Tampilkan data di halaman lain dan tambahkan ke list
+        complaintData?.let {
+
+            // Add the new complaint to the list
+            complaintList.add(it)
+
+            // Update the adapter with the new list
+            updateAdapter()
+
+            // Clear the intent data to avoid duplicates
+            intent.removeExtra("complaintData")
+        }
+        // Observe changes in Firestore and update the list
+        observeComplaints()
+
+        // Set item click listener for the listView
         with(binding) {
-            btnAdd.setOnClickListener {
-                val nominal = edtNominal.text.toString()
-                val description = edtDesc.text.toString()
-                val date = edtDate.text.toString()
-                val newBudget = Budget(nominal = nominal, description = description,
-                    date = date)
-                addBudget(newBudget)
-            }
-            btnUpdate.setOnClickListener {
-                val nominal = edtNominal.text.toString()
-                val description = edtDesc.text.toString()
-                val date = edtDate.text.toString()
-                val budgetToUpdate = Budget(nominal = nominal, description =
-                description, date = date)
-                updateBudget(budgetToUpdate)
-                updateId = ""
-                setEmptyField()
-            }
-            listView.setOnItemClickListener { adapterView, _, i, _ ->
-                val item = adapterView.adapter.getItem(i) as Budget
-                updateId = item.id
-                edtNominal.setText(item.nominal)
-                edtDesc.setText(item.description)
-                edtDate.setText(item.date)
-            }
-            listView.onItemLongClickListener = AdapterView.OnItemLongClickListener {
-                    adapterView, _, i, _ ->
-                val item = adapterView.adapter.getItem(i) as Budget
-                deleteBudget(item)
-                true
+            listView.setOnItemClickListener { _, _, position, _ ->
+                val selectedComplaint = complaintList[position]
+
+                // Intent untuk membuka ComplaintDetailActivity dengan data complaint yang dipilih
+                val intent = Intent(this@MainActivity, DetailAduanActivity::class.java)
+                intent.putExtra("selectedComplaint", selectedComplaint)
+                startActivity(intent)
             }
         }
-        observeBudgets()
-        getAllBudgets()
     }
 
-    private fun getAllBudgets() {
-        observeBudgetChanges()
-    }
-    private fun observeBudgets() {
-        budgetListLiveData.observe(this) { budgets ->
-            val adapter = ArrayAdapter(
-                this,
-                R.layout.list_item_budget,  // Use the correct layout resource ID here
-                R.id.textViewBudgetItem,    // Specify the ID of the TextView in the layout
-                budgets.toMutableList()
-            )
-            binding.listView.adapter = adapter
+
+
+    private fun updateAdapter() {
+        // Clear the adapter and add all items from the list
+        adapter.clear()
+        for (complaint in complaintList) {
+            val displayText =
+                "Name    :    ${complaint.nameComplaint}\nTitle       :   ${complaint.titleComplaint}\nContent:   ${complaint.descComplaint}"
+            adapter.add(displayText)
         }
     }
-    private fun observeBudgetChanges() {
-        budgetCollectionRef.addSnapshotListener { snapshots, error ->
+
+
+    private fun observeComplaints() {
+        val firestore = FirebaseFirestore.getInstance()
+        val complaintCollectionRef = firestore.collection("complaints")
+
+        complaintCollectionRef.addSnapshotListener { snapshots, error ->
             if (error != null) {
-                Log.d("MainActivity", "Error listening for budget changes: ", error)
+                Log.d("MainActivity", "Error listening for complaint changes: ", error)
                 return@addSnapshotListener
             }
-            val budgets = snapshots?.toObjects(Budget::class.java)
-            if (budgets != null) {
-                budgetListLiveData.postValue(budgets)
+
+            // Clear the existing list
+            complaintList.clear()
+
+            snapshots?.forEach { documentSnapshot ->
+                val complaint = documentSnapshot.toObject(Complaint::class.java)
+                if (complaint != null) {
+                    complaintList.add(complaint)
+                }
             }
-        }
-    }
-    private fun addBudget(budget: Budget) {
-        budgetCollectionRef.add(budget)
-            .addOnSuccessListener { documentReference ->
-                val createdBudgetId = documentReference.id
-                budget.id = createdBudgetId
-                documentReference.set(budget)
-                    .addOnFailureListener {
-                        Log.d("MainActivity", "Error updating budget ID: ", it)
-                    }
-            }
-            .addOnFailureListener {
-                Log.d("MainActivity", "Error adding budget: ", it)
-            }
-    }
-    private fun updateBudget(budget: Budget) {
-        budget.id = updateId
-        budgetCollectionRef.document(updateId).set(budget)
-            .addOnFailureListener {
-                Log.d("MainActivity", "Error updating budget: ", it)
-            }
-    }
-    private fun deleteBudget(budget: Budget) {
-        if (budget.id.isEmpty()) {
-            Log.d("MainActivity", "Error deleting: budget ID is empty!")
-            return
-        }
-        budgetCollectionRef.document(budget.id).delete()
-            .addOnFailureListener {
-                Log.d("MainActivity", "Error deleting budget: ", it)
-            }
-    }
-    private fun setEmptyField() {
-        with(binding) {
-            edtNominal.setText("")
-            edtDesc.setText("")
-            edtDate.setText("")
+
+            // Notify LiveData observer
+            complaintListLiveData.postValue(complaintList)
+
+            // Update the adapter with the new list
+            updateAdapter()
         }
     }
 
